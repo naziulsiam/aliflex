@@ -1,16 +1,8 @@
 {
   "name": "aliflex",
   "version": "1.0.0",
-  "description": "Media downloader with serverless backend",
-  "scripts": {
-    "dev": "vercel dev",
-    "deploy": "vercel --prod"
-  },
   "dependencies": {
-    "ytdl-core": "^4.11.5",
+    "@distube/ytdl-core": "^4.13.3",
     "fluent-ffmpeg": "^2.1.2"
-  },
-  "devDependencies": {
-    "vercel": "^33.0.0"
   }
 }
