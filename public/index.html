@@ -111,35 +111,71 @@ function extractVideoId(url) {
   return match ? match[1] : null;
 }
 
-      const handleDownload = async () => {
-        if (!mediaInfo) return;
-        setDownloading(true);
-        setError('');
+     const handleDownload = async () => {
+  if (!mediaInfo) return;
+  setDownloading(true);
+  setError('');
 
-        try {
-          const response = await fetch(`${API_BASE}/api/download`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, format: selectedFormat, quality: selectedQuality })
-          });
+  try {
+    console.log('Starting download...', { url, format: selectedFormat, quality: selectedQuality });
 
-          if (!response.ok) throw new Error('Download failed');
+    const response = await fetch(`${API_BASE}/api/download`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': '*/*'
+      },
+      body: JSON.stringify({ 
+        url, 
+        format: selectedFormat, 
+        quality: selectedQuality 
+      })
+    });
 
-          const blob = await response.blob();
-          const downloadUrl = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = downloadUrl;
-          link.download = `${mediaInfo.title}.${selectedFormat}`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(downloadUrl);
-        } catch (err) {
-          setError('Download failed: ' + err.message);
-        } finally {
-          setDownloading(false);
-        }
-      };
+    console.log('Response status:', response.status);
+    console.log('Response headers:', response.headers);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.error || 'Download failed');
+    }
+
+    // Check content type
+    const contentType = response.headers.get('content-type');
+    console.log('Content-Type:', contentType);
+
+    // Get the blob
+    const blob = await response.blob();
+    console.log('Blob size:', blob.size, 'bytes');
+
+    if (blob.size === 0) {
+      throw new Error('Downloaded file is empty');
+    }
+
+    // Create download
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `${mediaInfo.title.substring(0, 50)}.${selectedFormat}`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up
+    setTimeout(() => {
+      window.URL.revokeObjectURL(downloadUrl);
+    }, 100);
+
+    console.log('Download completed successfully');
+
+  } catch (err) {
+    console.error('Download error:', err);
+    setError(`Download failed: ${err.message}`);
+  } finally {
+    setDownloading(false);
+  }
+};
 
       return e('div', { className: `min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}` },
         // Header
