@@ -112,19 +112,45 @@ function extractVideoId(url) {
 }
 
     const handleDownload = async () => {
-  if (!mediaInfo || !mediaInfo.videoId) return;
+  if (!mediaInfo) return;
+  setDownloading(true);
+  setError('');
 
-  // Use a third-party download service
-  const services = {
-    y2mate: `https://www.y2mate.com/youtube/${mediaInfo.videoId}`,
-    savefrom: `https://en.savefrom.net/#url=https://youtube.com/watch?v=${mediaInfo.videoId}`,
-    loader: `https://loader.to/en/${selectedFormat === 'mp3' ? 'youtube-mp3' : 'youtube-to-mp4'}/?url=https://youtube.com/watch?v=${mediaInfo.videoId}`
-  };
+  try {
+    // Get direct download URL
+    const response = await fetch(`${API_BASE}/api/get-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        url, 
+        format: selectedFormat, 
+        quality: selectedQuality 
+      })
+    });
 
-  // Open in new tab
-  window.open(services.loader, '_blank');
-  
-  setError('Download service opened in new tab');
+    if (!response.ok) {
+      throw new Error('Failed to get download URL');
+    }
+
+    const data = await response.json();
+
+    // Download using direct URL
+    const link = document.createElement('a');
+    link.href = data.downloadUrl;
+    link.download = `${data.title}.${selectedFormat}`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    console.log('Download started');
+
+  } catch (err) {
+    console.error('Download error:', err);
+    setError(`Download failed: ${err.message}`);
+  } finally {
+    setDownloading(false);
+  }
 };
 
       return e('div', { className: `min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}` },
