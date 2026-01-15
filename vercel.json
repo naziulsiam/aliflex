@@ -4,5 +4,13 @@
       "source": "/api/:path*",
       "destination": "/api/:path*"
     }
-  ]
+  ],
+  "functions": {
+    "api/download.js": {
+      "maxDuration": 60
+    },
+    "api/info.js": {
+      "maxDuration": 30
+    }
+  }
 }
