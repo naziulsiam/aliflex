@@ -1,7 +1,7 @@
 {
   "name": "aliflex",
   "version": "1.0.0",
-  "description": "Media downloader",
+  "type": "module",
   "dependencies": {
     "@distube/ytdl-core": "^4.13.3"
   }
