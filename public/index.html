@@ -56,33 +56,42 @@
         setIsValid(input.length > 10 ? validateUrl(input) : null);
       };
 
-      const fetchMedia = async () => {
-        if (!isValid) {
-          setError('Please enter a valid YouTube URL');
-          return;
-        }
+const fetchMedia = async () => {
+  if (!isValid) {
+    setError('Please enter a valid YouTube URL');
+    return;
+  }
 
-        setLoading(true);
-        setError('');
+  setLoading(true);
+  setError('');
 
-        try {
-          const response = await fetch(`${API_BASE}/api/info`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url })
-          });
+  try {
+    console.log('Fetching from:', `${API_BASE}/api/info`);
+    
+    const response = await fetch(`${API_BASE}/api/info`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
 
-          if (!response.ok) throw new Error('Failed to fetch media info');
+    console.log('Response status:', response.status);
 
-          const data = await response.json();
-          setMediaInfo(data);
-        } catch (err) {
-          setError('Failed to fetch media info: ' + err.message);
-        } finally {
-          setLoading(false);
-        }
-      };
+    const data = await response.json();
+    
+    console.log('Response data:', data);
 
+    if (!response.ok) {
+      throw new Error(data.message || data.error || 'Failed to fetch media info');
+    }
+
+    setMediaInfo(data);
+  } catch (err) {
+    console.error('Fetch error:', err);
+    setError(`Failed to fetch: ${err.message}. Check console for details.`);
+  } finally {
+    setLoading(false);
+  }
+};
       const handleDownload = async () => {
         if (!mediaInfo) return;
         setDownloading(true);
@@ -225,11 +234,3 @@
   </script>
 </body>
 </html>
-```
-
-### 6. `.gitignore`
-```
-node_modules/
-.vercel
-.env
-*.log
