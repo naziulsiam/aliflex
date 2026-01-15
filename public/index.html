@@ -111,20 +111,16 @@ function extractVideoId(url) {
   return match ? match[1] : null;
 }
 
-     const handleDownload = async () => {
+    const handleDownload = async () => {
   if (!mediaInfo) return;
   setDownloading(true);
   setError('');
 
   try {
-    console.log('Starting download...', { url, format: selectedFormat, quality: selectedQuality });
-
-    const response = await fetch(`${API_BASE}/api/download`, {
+    // Get direct download URL
+    const response = await fetch(`${API_BASE}/api/get-url`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': '*/*'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         url, 
         format: selectedFormat, 
@@ -132,42 +128,22 @@ function extractVideoId(url) {
       })
     });
 
-    console.log('Response status:', response.status);
-    console.log('Response headers:', response.headers);
-
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || errorData.error || 'Download failed');
+      throw new Error('Failed to get download URL');
     }
 
-    // Check content type
-    const contentType = response.headers.get('content-type');
-    console.log('Content-Type:', contentType);
+    const data = await response.json();
 
-    // Get the blob
-    const blob = await response.blob();
-    console.log('Blob size:', blob.size, 'bytes');
-
-    if (blob.size === 0) {
-      throw new Error('Downloaded file is empty');
-    }
-
-    // Create download
-    const downloadUrl = window.URL.createObjectURL(blob);
+    // Download using direct URL
     const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `${mediaInfo.title.substring(0, 50)}.${selectedFormat}`;
-    
+    link.href = data.downloadUrl;
+    link.download = `${data.title}.${selectedFormat}`;
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    // Clean up
-    setTimeout(() => {
-      window.URL.revokeObjectURL(downloadUrl);
-    }, 100);
 
-    console.log('Download completed successfully');
+    console.log('Download started');
 
   } catch (err) {
     console.error('Download error:', err);
