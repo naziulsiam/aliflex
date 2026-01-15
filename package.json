@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
-    "@distube/ytdl-core": "^4.13.3"
+    "ytdl-core": "^4.11.5",
+    "youtube-dl-exec": "^2.4.0"
   }
 }
