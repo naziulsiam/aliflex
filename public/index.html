@@ -57,17 +57,22 @@
       }
     };
 
-    const handleDownload = () => {
-      if (!mediaInfo) return;
-
-      // Direct download using the API-provided link
-      if (selectedFormat === 'mp3' && mediaInfo.downloadLinks?.mp3) {
-        window.open(mediaInfo.downloadLinks.mp3, '_blank');
-      } else {
-        // For MP4, redirect to download service
-        window.open(`https://loader.to/api/button/?url=${encodeURIComponent(url)}&format=mp4&color=green`, '_blank');
-      }
-    };
+   const handleDownload = () => {
+  if (!mediaInfo || !mediaInfo.videoId) return;
+  
+  // Use free download services
+  const services = {
+    mp3: `https://ytmp3.nu/download?v=${mediaInfo.videoId}`,
+    mp4: `https://ytmp3.nu/watch?v=${mediaInfo.videoId}`
+  };
+  
+  const downloadUrl = selectedFormat === 'mp3' ? services.mp3 : services.mp4;
+  
+  // Open in new tab
+  window.open(downloadUrl, '_blank');
+  
+  console.log('Download service opened');
+};
 
     return e('div', { className: `min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}` },
       // Header
