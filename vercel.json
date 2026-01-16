@@ -4,8 +4,5 @@
       "source": "/api/:path*",
       "destination": "/api/:path*"
     }
-  ],
-  "env": {
-    "RAPIDAPI_KEY": "@rapidapi_key"
-  }
+  ]
 }
