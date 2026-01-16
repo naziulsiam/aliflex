@@ -83,35 +83,22 @@
         }
       };
 
-      const handleDownload = async () => {
-        if (!mediaInfo) return;
-        setDownloading(true);
-        setError('');
-
-        try {
-          const response = await fetch(`${API_BASE}/api/download`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, format: selectedFormat, quality: selectedQuality })
-          });
-
-          if (!response.ok) throw new Error('Download failed');
-
-          const blob = await response.blob();
-          const downloadUrl = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = downloadUrl;
-          link.download = `${mediaInfo.title}.${selectedFormat}`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(downloadUrl);
-        } catch (err) {
-          setError('Download failed: ' + err.message);
-        } finally {
-          setDownloading(false);
-        }
-      };
+     const handleDownload = () => {
+  if (!mediaInfo || !mediaInfo.videoId) return;
+  
+  // Use free download services
+  const services = {
+    mp3: `https://ytmp3.nu/download?v=${mediaInfo.videoId}`,
+    mp4: `https://ytmp3.nu/watch?v=${mediaInfo.videoId}`
+  };
+  
+  const downloadUrl = selectedFormat === 'mp3' ? services.mp3 : services.mp4;
+  
+  // Open in new tab
+  window.open(downloadUrl, '_blank');
+  
+  console.log('Download service opened');
+};
 
       return e('div', { className: `min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}` },
         // Header
