@@ -1,175 +1,235 @@
-<script>
-  const { useState, useEffect, createElement: e } = React;
-  const API_BASE = window.location.origin;
-
-  function App() {
-    const [darkMode, setDarkMode] = useState(true);
-    const [url, setUrl] = useState('');
-    const [isValid, setIsValid] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [mediaInfo, setMediaInfo] = useState(null);
-    const [selectedFormat, setSelectedFormat] = useState('mp3');
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-      document.documentElement.classList.toggle('dark', darkMode);
-    }, [darkMode]);
-
-    const validateUrl = (input) => {
-      return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.*$/i.test(input);
-    };
-
-    const handleUrlChange = (ev) => {
-      const input = ev.target.value;
-      setUrl(input);
-      setError('');
-      setMediaInfo(null);
-      setIsValid(input.length > 10 ? validateUrl(input) : null);
-    };
-
-    const fetchMedia = async () => {
-      if (!isValid) {
-        setError('Please enter a valid YouTube URL');
-        return;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AliFlex - Media Downloader</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {}
       }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .animate-spin { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900">
+  <div id="root"></div>
 
-      setLoading(true);
-      setError('');
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-      try {
-        const response = await fetch(`${API_BASE}/api/youtube-info`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
+  <script>
+    const { useState, useEffect, createElement: e } = React;
+    const API_BASE = window.location.origin;
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to fetch');
+    function App() {
+      const [darkMode, setDarkMode] = useState(true);
+      const [url, setUrl] = useState('');
+      const [isValid, setIsValid] = useState(null);
+      const [loading, setLoading] = useState(false);
+      const [mediaInfo, setMediaInfo] = useState(null);
+      const [selectedFormat, setSelectedFormat] = useState('mp4');
+      const [selectedQuality, setSelectedQuality] = useState('medium');
+      const [downloading, setDownloading] = useState(false);
+      const [error, setError] = useState('');
+
+      useEffect(() => {
+        document.documentElement.classList.toggle('dark', darkMode);
+      }, [darkMode]);
+
+      const validateUrl = (input) => {
+        return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.*$/i.test(input);
+      };
+
+      const handleUrlChange = (ev) => {
+        const input = ev.target.value;
+        setUrl(input);
+        setError('');
+        setMediaInfo(null);
+        setIsValid(input.length > 10 ? validateUrl(input) : null);
+      };
+
+      const fetchMedia = async () => {
+        if (!isValid) {
+          setError('Please enter a valid YouTube URL');
+          return;
         }
 
-        const data = await response.json();
-        setMediaInfo(data);
-      } catch (err) {
-        setError(`Error: ${err.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
+        setLoading(true);
+        setError('');
 
-   const handleDownload = () => {
-  if (!mediaInfo || !mediaInfo.videoId) return;
-  
-  // Use free download services
-  const services = {
-    mp3: `https://ytmp3.nu/download?v=${mediaInfo.videoId}`,
-    mp4: `https://ytmp3.nu/watch?v=${mediaInfo.videoId}`
-  };
-  
-  const downloadUrl = selectedFormat === 'mp3' ? services.mp3 : services.mp4;
-  
-  // Open in new tab
-  window.open(downloadUrl, '_blank');
-  
-  console.log('Download service opened');
-};
+        try {
+          const response = await fetch(`${API_BASE}/api/info`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
 
-    return e('div', { className: `min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}` },
-      // Header
-      e('header', { className: `${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b` },
-        e('div', { className: 'max-w-6xl mx-auto px-4 py-4 flex justify-between items-center' },
-          e('div', { className: 'flex items-center gap-3' },
-            e('div', { className: 'bg-gradient-to-r from-indigo-500 to-purple-600 p-2 rounded-lg' },
-              e('svg', { className: 'w-6 h-6 text-white', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
-                e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' })
+          if (!response.ok) throw new Error('Failed to fetch media info');
+
+          const data = await response.json();
+          setMediaInfo(data);
+        } catch (err) {
+          setError('Failed to fetch media info: ' + err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleDownload = async () => {
+        if (!mediaInfo) return;
+        setDownloading(true);
+        setError('');
+
+        try {
+          const response = await fetch(`${API_BASE}/api/download`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, format: selectedFormat, quality: selectedQuality })
+          });
+
+          if (!response.ok) throw new Error('Download failed');
+
+          const blob = await response.blob();
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = `${mediaInfo.title}.${selectedFormat}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+        } catch (err) {
+          setError('Download failed: ' + err.message);
+        } finally {
+          setDownloading(false);
+        }
+      };
+
+      return e('div', { className: `min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}` },
+        // Header
+        e('header', { className: `${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-b` },
+          e('div', { className: 'max-w-6xl mx-auto px-4 py-4 flex justify-between items-center' },
+            e('div', { className: 'flex items-center gap-3' },
+              e('div', { className: 'bg-gradient-to-r from-indigo-500 to-purple-600 p-2 rounded-lg' },
+                e('svg', { className: 'w-6 h-6 text-white', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+                  e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' })
+                )
+              ),
+              e('h1', { className: `text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}` }, 'AliFlex')
+            ),
+            e('button', {
+              onClick: () => setDarkMode(!darkMode),
+              className: `p-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`
+            },
+              e('svg', { className: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+                darkMode 
+                  ? e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' })
+                  : e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' })
+              )
+            )
+          )
+        ),
+
+        // Main Content
+        e('main', { className: 'max-w-4xl mx-auto px-4 py-12' },
+          // Input Card
+          e('div', { className: `${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-xl p-8 mb-8` },
+            e('h2', { className: `text-xl font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}` }, 'Enter YouTube URL'),
+            e('div', { className: 'relative' },
+              e('input', {
+                type: 'text',
+                value: url,
+                onChange: handleUrlChange,
+                placeholder: 'https://youtube.com/watch?v=...',
+                className: `w-full px-4 py-3 pr-12 rounded-lg border-2 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:border-indigo-500`
+              }),
+              isValid !== null && e('div', { className: 'absolute right-3 top-1/2 -translate-y-1/2' },
+                e('svg', { className: `w-6 h-6 ${isValid ? 'text-green-500' : 'text-red-500'}`, fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
+                  e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: isValid ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' })
+                )
               )
             ),
-            e('h1', { className: `text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}` }, 'AliFlex')
+            error && e('p', { className: 'mt-2 text-sm text-red-500' }, error),
+            e('button', {
+              onClick: fetchMedia,
+              disabled: !isValid || loading,
+              className: `mt-6 w-full py-3 rounded-lg font-semibold ${isValid && !loading ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:shadow-xl' : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`
+            }, loading ? 'Fetching...' : 'Fetch Media')
           ),
-          e('button', {
-            onClick: () => setDarkMode(!darkMode),
-            className: `p-2 rounded-lg ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'}`
-          },
-            e('svg', { className: 'w-5 h-5', fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
-              darkMode 
-                ? e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' })
-                : e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' })
-            )
-          )
-        )
-      ),
 
-      // Main Content
-      e('main', { className: 'max-w-4xl mx-auto px-4 py-12' },
-        // Input Card
-        e('div', { className: `${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-xl p-8 mb-8` },
-          e('h2', { className: `text-xl font-semibold mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}` }, 'Enter YouTube URL'),
-          e('div', { className: 'relative' },
-            e('input', {
-              type: 'text',
-              value: url,
-              onChange: handleUrlChange,
-              placeholder: 'https://youtube.com/watch?v=...',
-              className: `w-full px-4 py-3 pr-12 rounded-lg border-2 ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:border-indigo-500`
-            }),
-            isValid !== null && e('div', { className: 'absolute right-3 top-1/2 -translate-y-1/2' },
-              e('svg', { className: `w-6 h-6 ${isValid ? 'text-green-500' : 'text-red-500'}`, fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' },
-                e('path', { strokeLinecap: 'round', strokeLinejoin: 'round', strokeWidth: 2, d: isValid ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' })
+          // Media Info
+          mediaInfo && e('div', { className: `${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-xl p-8 mb-8` },
+            e('div', { className: 'flex flex-col md:flex-row gap-6 mb-6' },
+              e('img', { src: mediaInfo.thumbnail, alt: 'Thumbnail', className: 'w-full md:w-64 rounded-lg' }),
+              e('div', null,
+                e('h3', { className: `text-lg font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}` }, mediaInfo.title),
+                e('p', { className: `text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}` }, 
+                  mediaInfo.platform + ' • ' + mediaInfo.duration
+                )
               )
-            )
-          ),
-          error && e('p', { className: 'mt-2 text-sm text-red-500' }, error),
-          e('button', {
-            onClick: fetchMedia,
-            disabled: !isValid || loading,
-            className: `mt-6 w-full py-3 rounded-lg font-semibold ${isValid && !loading ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:shadow-xl' : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`
-          }, loading ? 'Fetching...' : 'Fetch Media')
+            ),
+            e('div', { className: 'grid md:grid-cols-2 gap-6 mb-6' },
+              e('div', null,
+                e('label', { className: `block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}` }, 'Format'),
+                e('select', {
+                  value: selectedFormat,
+                  onChange: (ev) => setSelectedFormat(ev.target.value),
+                  className: `w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300'}`
+                },
+                  e('option', { value: 'mp4' }, 'MP4'),
+                  e('option', { value: 'webm' }, 'WEBM'),
+                  e('option', { value: 'mp3' }, 'MP3'),
+                  e('option', { value: 'm4a' }, 'M4A')
+                )
+              ),
+              e('div', null,
+                e('label', { className: `block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}` }, 'Quality'),
+                e('select', {
+                  value: selectedQuality,
+                  onChange: (ev) => setSelectedQuality(ev.target.value),
+                  className: `w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300'}`
+                },
+                  e('option', { value: 'lowest' }, 'Lowest'),
+                  e('option', { value: 'medium' }, 'Medium'),
+                  e('option', { value: 'highest' }, 'Highest'),
+                  e('option', { value: 'original' }, 'Original')
+                )
+              )
+            ),
+            e('button', {
+              onClick: handleDownload,
+              disabled: downloading,
+              className: `w-full py-3 rounded-lg font-semibold ${downloading ? 'bg-gray-600 text-gray-400' : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-xl'}`
+            }, downloading ? 'Downloading...' : 'Download')
+          )
         ),
 
-        // Media Info
-        mediaInfo && e('div', { className: `${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-xl p-8 mb-8` },
-          e('div', { className: 'flex flex-col md:flex-row gap-6 mb-6' },
-            e('img', { src: mediaInfo.thumbnail, alt: 'Thumbnail', className: 'w-full md:w-64 rounded-lg' }),
-            e('div', null,
-              e('h3', { className: `text-lg font-semibold mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}` }, mediaInfo.title),
-              e('p', { className: `text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}` }, 
-                mediaInfo.platform + ' • ' + mediaInfo.duration
-              )
-            )
-          ),
-          e('div', { className: 'mb-6' },
-            e('label', { className: `block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}` }, 'Format'),
-            e('select', {
-              value: selectedFormat,
-              onChange: (ev) => setSelectedFormat(ev.target.value),
-              className: `w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300'}`
-            },
-              e('option', { value: 'mp3' }, 'MP3 (Audio)'),
-              e('option', { value: 'mp4' }, 'MP4 (Video)')
-            )
-          ),
-          e('button', {
-            onClick: handleDownload,
-            className: 'w-full py-3 rounded-lg font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-xl'
-          }, 'Download Now')
-        ),
-
-        // Info
-        e('div', { className: `${darkMode ? 'bg-blue-900/20 border-blue-700' : 'bg-blue-50 border-blue-200'} border rounded-lg p-4` },
-          e('p', { className: `text-sm ${darkMode ? 'text-blue-300' : 'text-blue-800'}` },
-            '💡 MP3 downloads directly. MP4 opens in a new tab with download options.'
+        // Footer
+        e('footer', { className: `${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-t mt-12` },
+          e('div', { className: 'max-w-6xl mx-auto px-4 py-8' },
+            e('p', { className: `text-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}` }, '© 2024 AliFlex. Educational use only.')
           )
         )
-      ),
+      );
+    }
 
-      // Footer
-      e('footer', { className: `${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-t mt-12` },
-        e('div', { className: 'max-w-6xl mx-auto px-4 py-8' },
-          e('p', { className: `text-center text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}` }, '© 2024 AliFlex. Educational use only.')
-        )
-      )
-    );
-  }
+    ReactDOM.render(e(App), document.getElementById('root'));
+  </script>
+</body>
+</html>
+```
 
-  ReactDOM.render(e(App), document.getElementById('root'));
-</script>
+### 6. `.gitignore`
+```
+node_modules/
+.vercel
+.env
+*.log
