@@ -1,27 +1,36 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Home, Heart, Clock, Grid3x3 } from 'lucide-react';
+import { Home, Search, Heart, Grid3x3 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 
 interface MobileNavProps {
   onOpenCategories: () => void;
+  onOpenSearch: () => void;
 }
 
 const ITEMS = [
-  { icon: Home,     label: 'Home',       value: null as string | null },
-  { icon: Heart,    label: 'My List',    value: '__favorites' },
-  { icon: Clock,    label: 'Recent',     value: '__recent' },
-  { icon: Grid3x3,  label: 'Categories', value: '__categories' },
+  { icon: Home,     label: 'Home',       value: null as string | null, action: 'home' },
+  { icon: Search,   label: 'Search',     value: '__search',            action: 'search' },
+  { icon: Heart,    label: 'Favorites',  value: '__favorites',         action: 'favorites' },
+  { icon: Grid3x3,  label: 'Categories', value: '__categories',        action: 'categories' },
 ] as const;
 
-export default function MobileNav({ onOpenCategories }: MobileNavProps) {
-  const activeGroup    = useAppStore(s => s.activeGroup);
-  const setActiveGroup = useAppStore(s => s.setActiveGroup);
+export default function MobileNav({ onOpenCategories, onOpenSearch }: MobileNavProps) {
+  const activeGroup      = useAppStore(s => s.activeGroup);
+  const setActiveGroup   = useAppStore(s => s.setActiveGroup);
+  const setActiveCategory = useAppStore(s => s.setActiveCategory);
 
-  const handleClick = (value: string | null) => {
-    if (value === '__categories') { onOpenCategories(); return; }
+  const handleClick = (action: string, value: string | null) => {
+    if (action === 'search')     { onOpenSearch(); return; }
+    if (action === 'categories') { onOpenCategories(); return; }
     setActiveGroup(value);
+    setActiveCategory(null);
+  };
+
+  const isActive = (action: string, value: string | null) => {
+    if (action === 'search' || action === 'categories') return false;
+    return activeGroup === value;
   };
 
   return (
@@ -33,35 +42,25 @@ export default function MobileNav({ onOpenCategories }: MobileNavProps) {
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}
     >
       {ITEMS.map(item => {
-        const isActive =
-          item.value !== '__categories' && activeGroup === item.value;
-
+        const active = isActive(item.action, item.value);
         return (
           <button
             key={item.label}
-            onClick={() => handleClick(item.value)}
+            onClick={() => handleClick(item.action, item.value)}
             className="relative flex flex-col items-center gap-1 flex-1 pt-2.5 pb-1 min-h-[56px] transition-colors"
             aria-label={item.label}
           >
-            {/* Animated pill background */}
-            {isActive && (
+            {active && (
               <motion.div
                 layoutId="mobile-nav-pill"
                 className="absolute top-1 left-3 right-3 h-8 rounded-full bg-primary/15"
                 transition={{ type: 'spring', damping: 28, stiffness: 380 }}
               />
             )}
-
             <item.icon
-              className={`w-5 h-5 relative z-10 transition-colors ${
-                isActive ? 'text-primary' : 'text-muted'
-              }`}
+              className={`w-5 h-5 relative z-10 transition-colors ${active ? 'text-primary' : 'text-muted'}`}
             />
-            <span
-              className={`text-[10px] font-semibold relative z-10 transition-colors ${
-                isActive ? 'text-primary' : 'text-muted'
-              }`}
-            >
+            <span className={`text-[10px] font-semibold relative z-10 transition-colors ${active ? 'text-primary' : 'text-muted'}`}>
               {item.label}
             </span>
           </button>
