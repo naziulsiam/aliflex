@@ -1,45 +1,62 @@
+/* ── Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ── Scrollbars ── */
 * {
   scrollbar-width: thin;
   scrollbar-color: #2a2a36 transparent;
 }
+*::-webkit-scrollbar { height: 4px; width: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #2a2a36; border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: #3f3f50; }
 
-*::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
-}
-
-*::-webkit-scrollbar-thumb {
-  background: #2a2a36;
-  border-radius: 999px;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: #3a3a48;
-}
-
+/* ── Base ── */
 html, body {
   background-color: #0b0b0f;
   color: #f5f5f7;
   overscroll-behavior: none;
+  scroll-behavior: smooth;
 }
 
+/* ── Ken Burns keyframe ── */
+@keyframes kenburns-1 {
+  0%   { transform: scale(1)    translate(0%,  0%); }
+  100% { transform: scale(1.12) translate(-3%, -2%); }
+}
+@keyframes kenburns-2 {
+  0%   { transform: scale(1)    translate(0%,  0%); }
+  100% { transform: scale(1.1)  translate(2%, -1%); }
+}
+.animate-kenburns-1 {
+  animation: kenburns-1 18s ease-in-out infinite alternate;
+}
+.animate-kenburns-2 {
+  animation: kenburns-2 22s ease-in-out infinite alternate-reverse;
+}
+
+/* ── Shimmer skeleton ── */
+@keyframes shimmer {
+  0%   { background-position: -1000px 0; }
+  100% { background-position:  1000px 0; }
+}
 .shimmer-bg {
-  background: linear-gradient(90deg, #15151c 25%, #1f1f29 37%, #15151c 63%);
+  background: linear-gradient(90deg, #15151c 25%, #252530 37%, #15151c 63%);
   background-size: 1000px 100%;
+  animation: shimmer 1.8s infinite linear;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+/* ── Utilities ── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-video::-webkit-media-controls {
-  display: none !important;
+video::-webkit-media-controls { display: none !important; }
+
+/* Volume range slider */
+input[type='range'].accent-primary {
+  accent-color: #e50914;
 }
