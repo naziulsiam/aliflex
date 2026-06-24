@@ -88,7 +88,7 @@ export default function LivePage() {
     if ((window as any).mpegts.getFeatureList().mseLivePlayback) {
       try {
         const player = (window as any).mpegts.createPlayer({
-          type: 'mse',
+          type: 'mpegts',
           isLive: true,
           url: url
         }, {
