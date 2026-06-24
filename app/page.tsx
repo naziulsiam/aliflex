@@ -69,7 +69,7 @@ export default function LivePage() {
   // Handle stream loading using mpegts.js
   const initPlayer = useCallback((url: string) => {
     const video = videoRef.current;
-    if (!video || !window.mpegts || !url) return;
+    if (!video || !(window as any).mpegts || !url) return;
 
     setLoading(true);
     setError(null);
@@ -85,9 +85,9 @@ export default function LivePage() {
       playerRef.current = null;
     }
 
-    if (window.mpegts.getFeatureList().mseLivePlayback) {
+    if ((window as any).mpegts.getFeatureList().mseLivePlayback) {
       try {
-        const player = window.mpegts.createPlayer({
+        const player = (window as any).mpegts.createPlayer({
           type: 'mse',
           isLive: true,
           url: url
@@ -114,7 +114,7 @@ export default function LivePage() {
             setStatus('live');
           });
 
-        player.on(window.mpegts.Events.ERROR, (type: string, detail: string, info: any) => {
+        player.on((window as any).mpegts.Events.ERROR, (type: string, detail: string, info: any) => {
           console.error('mpegts.js error:', type, detail, info);
           setError('Stream unavailable. Retrying...');
           setStatus('error');
