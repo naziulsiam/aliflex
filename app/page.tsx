@@ -17,13 +17,44 @@ import {
 
 const DIRECT_STREAM_URL = 'http://162.19.255.233:8080/play/UNbAl57p9hXZClOu56FCTf_5weWAERKDgrt9JpvlAiI/m3u8';
 
+interface StreamChannel {
+  name: string;
+  url: string;
+}
+
+const CHANNELS: StreamChannel[] = [
+  {
+    name: 'AliFlix Stream (Direct)',
+    url: DIRECT_STREAM_URL
+  },
+  {
+    name: 'KickBD Ultra (BeIN 4K)',
+    url: 'https://pub-4aa1aaf3896e4dd0923f238800b68845.r2.dev/kickbd-bein4k/main.m3u8'
+  },
+  {
+    name: 'ios Server 2 (PTV Sports)',
+    url: 'https://trs1.aynaott.com/ptvsports/tracks-v1a1/mono.ts.m3u8'
+  },
+  {
+    name: 'ios Server 1 (Fox Sports)',
+    url: 'https://streamsports.site/api/stream-proxy?url=https%3A%2F%2Fcdn.fifalive.click%2Fplay.m3u8'
+  },
+  {
+    name: 'KickBD Edge (FIFA FHD)',
+    url: 'https://prod-cdn01-live.toffeelive.com/live/FIFA-2026-3/0/master_2000.m3u8?hdntl=Expires=1782422686~_GO=Generated~URLPrefix=aHR0cHM6Ly9wcm9kLWNkbjAxLWxpdmUudG9mZmVlbGl2ZS5jb20~Signature=AVXEwvdw_EW5yg24646Tzt0JTgHcKGu1d-bn9GbywpEI3FBOVE8cEtb0uSgOCgprrb7FYTph1R5J3AWwM5aCDED4FRAH'
+  }
+];
+
 export default function LivePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
+  const hlsPlayerRef = useRef<any>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [mpegtsLoaded, setMpegtsLoaded] = useState(false);
+  const [hlsLoaded, setHlsLoaded] = useState(false);
+  const [currentChannel, setCurrentChannel] = useState<StreamChannel>(CHANNELS[0]);
   const [streamUrl, setStreamUrl] = useState('');
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -34,13 +65,17 @@ export default function LivePage() {
   const [status, setStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   const [showControls, setShowControls] = useState(true);
 
-  // Determine stream URL protocol on mount
+  // Determine stream URL protocol on mount and when channel switches
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const isHttps = window.location.protocol === 'https:';
-      setStreamUrl(isHttps ? `${window.location.origin}/api/stream` : DIRECT_STREAM_URL);
+      if (currentChannel.name === 'AliFlix Stream (Direct)') {
+        const isHttps = window.location.protocol === 'https:';
+        setStreamUrl(isHttps ? `${window.location.origin}/api/stream` : DIRECT_STREAM_URL);
+      } else {
+        setStreamUrl(currentChannel.url);
+      }
     }
-  }, []);
+  }, [currentChannel]);
 
   // Auto-hide controls on mouse/touch inactivity
   const resetHideTimer = useCallback(() => {
@@ -66,16 +101,16 @@ export default function LivePage() {
     };
   }, [resetHideTimer]);
 
-  // Handle stream loading using mpegts.js
+  // Handle stream loading using mpegts.js or hls.js
   const initPlayer = useCallback((url: string) => {
     const video = videoRef.current;
-    if (!video || !(window as any).mpegts || !url) return;
+    if (!video || !url) return;
 
     setLoading(true);
     setError(null);
     setStatus('connecting');
 
-    // Clean up existing player if any
+    // Clean up existing players
     if (playerRef.current) {
       try {
         playerRef.current.destroy();
@@ -84,67 +119,143 @@ export default function LivePage() {
       }
       playerRef.current = null;
     }
-
-    if ((window as any).mpegts.getFeatureList().mseLivePlayback) {
+    if (hlsPlayerRef.current) {
       try {
-        const player = (window as any).mpegts.createPlayer({
-          type: 'mpegts',
-          isLive: true,
-          url: url
-        }, {
-          enableWorker: true,
-          enableStashBuffer: false,
-          stashInitialSize: 128
-        });
+        hlsPlayerRef.current.destroy();
+      } catch (e) {
+        console.error(e);
+      }
+      hlsPlayerRef.current = null;
+    }
 
-        playerRef.current = player;
-        player.attachMediaElement(video);
-        player.load();
+    const isHls = url.includes('.m3u8');
 
-        player.play()
-          .then(() => {
+    if (isHls) {
+      const HlsClass = (window as any).Hls;
+      if (HlsClass && HlsClass.isSupported()) {
+        try {
+          const hls = new HlsClass({
+            enableWorker: true,
+            lowLatencyMode: false,
+            backBufferLength: 30,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
+            liveSyncDurationCount: 4,
+            liveMaxLatencyDurationCount: 6
+          });
+
+          hlsPlayerRef.current = hls;
+          hls.loadSource(url);
+          hls.attachMedia(video);
+
+          hls.on(HlsClass.Events.MANIFEST_PARSED, () => {
             setPlaying(true);
             setLoading(false);
             setStatus('live');
-          })
-          .catch((err: any) => {
-            console.warn('Auto-play blocked or failed:', err);
-            // Don't show error immediately as users might need to interact to play
-            setLoading(false);
-            setStatus('live');
+            video.play().catch(() => {});
           });
 
-        player.on((window as any).mpegts.Events.ERROR, (type: string, detail: string, info: any) => {
-          console.error('mpegts.js error:', type, detail, info);
-          setError('Stream unavailable. Retrying...');
+          hls.on(HlsClass.Events.ERROR, (event: any, data: any) => {
+            console.error('hls.js error:', data);
+            if (data.fatal) {
+              setError('Stream source error. Retrying...');
+              setStatus('error');
+              setLoading(false);
+            }
+          });
+        } catch (err: any) {
+          console.error('Failed to initialize hls.js player:', err);
+          setError('Failed to initialize HLS engine.');
           setStatus('error');
           setLoading(false);
-        });
+        }
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS for Safari/iOS
+        video.src = url;
+        
+        const onLoadedMetadata = () => {
+          setLoading(false);
+          setStatus('live');
+          video.play().then(() => setPlaying(true)).catch(() => {});
+        };
 
-      } catch (err: any) {
-        console.error('Failed to create mpegts player:', err);
-        setError('Failed to initialize streaming engine.');
+        const onError = () => {
+          setError('Stream offline or incompatible.');
+          setStatus('error');
+          setLoading(false);
+        };
+
+        video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+        video.addEventListener('error', onError, { once: true });
+      } else {
+        setError('Your browser does not support HLS playback.');
         setStatus('error');
         setLoading(false);
       }
     } else {
-      // Fallback for Safari/iOS which support native HLS but not MSE
-      video.src = url;
-      
-      const onLoadedMetadata = () => {
-        setLoading(false);
-        setStatus('live');
-        video.play().then(() => setPlaying(true)).catch(() => {});
-      };
+      // MPEG-TS playback
+      if (!(window as any).mpegts) return;
 
-      const onError = () => {
-        setError('Incompatible browser format or stream offline.');
-        setStatus('error');
-        setLoading(false);
-      };
+      if ((window as any).mpegts.getFeatureList().mseLivePlayback) {
+        try {
+          const player = (window as any).mpegts.createPlayer({
+            type: 'mpegts',
+            isLive: true,
+            url: url
+          }, {
+            enableWorker: true,
+            enableStashBuffer: false,
+            stashInitialSize: 128
+          });
 
-      video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
-      video.addEventListener('error', onError, { once: true });
+          playerRef.current = player;
+          player.attachMediaElement(video);
+          player.load();
+
+          player.play()
+            .then(() => {
+              setPlaying(true);
+              setLoading(false);
+              setStatus('live');
+            })
+            .catch((err: any) => {
+              console.warn('Auto-play blocked or failed:', err);
+              setLoading(false);
+              setStatus('live');
+            });
+
+          player.on((window as any).mpegts.Events.ERROR, (type: string, detail: string, info: any) => {
+            console.error('mpegts.js error:', type, detail, info);
+            setError('Stream unavailable. Retrying...');
+            setStatus('error');
+            setLoading(false);
+          });
+
+        } catch (err: any) {
+          console.error('Failed to create mpegts player:', err);
+          setError('Failed to initialize streaming engine.');
+          setStatus('error');
+          setLoading(false);
+        }
+      } else {
+        // Fallback for Safari/iOS which support native playback
+        video.src = url;
+        
+        const onLoadedMetadata = () => {
+          setLoading(false);
+          setStatus('live');
+          video.play().then(() => setPlaying(true)).catch(() => {});
+        };
+
+        const onError = () => {
+          setError('Incompatible browser format or stream offline.');
+          setStatus('error');
+          setLoading(false);
+        };
+
+        video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+        video.addEventListener('error', onError, { once: true });
+      }
     }
   }, []);
 
@@ -153,12 +264,43 @@ export default function LivePage() {
     setMpegtsLoaded(true);
   };
 
-  // Trigger player setup once both library is loaded and URL is resolved
+  // Trigger player setup once library is loaded and URL is resolved
   useEffect(() => {
-    if (mpegtsLoaded && streamUrl) {
-      initPlayer(streamUrl);
+    if (!streamUrl) return;
+
+    const isHls = streamUrl.includes('.m3u8');
+
+    if (isHls) {
+      const hasNativeHls = typeof window !== 'undefined' && videoRef.current?.canPlayType('application/vnd.apple.mpegurl');
+      if (hlsLoaded || (window as any).Hls || hasNativeHls) {
+        initPlayer(streamUrl);
+      }
+    } else {
+      if (mpegtsLoaded || (window as any).mpegts) {
+        initPlayer(streamUrl);
+      }
     }
-  }, [mpegtsLoaded, streamUrl, initPlayer]);
+  }, [mpegtsLoaded, hlsLoaded, streamUrl, initPlayer]);
+
+  // Clean up players on unmount
+  useEffect(() => {
+    return () => {
+      if (playerRef.current) {
+        try {
+          playerRef.current.destroy();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      if (hlsPlayerRef.current) {
+        try {
+          hlsPlayerRef.current.destroy();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+  }, []);
 
   // Re-run player initialization if error occurs and user clicks retry
   const handleRetry = () => {
@@ -242,6 +384,13 @@ export default function LivePage() {
         onLoad={handleScriptLoad}
       />
 
+      {/* HLS CDN Script */}
+      <Script 
+        src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"
+        strategy="afterInteractive"
+        onLoad={() => setHlsLoaded(true)}
+      />
+
       {/* Main Video Element */}
       <video
         ref={videoRef}
@@ -302,6 +451,37 @@ export default function LivePage() {
 
         {/* Bottom Control Bar */}
         <div className="w-full flex flex-col pointer-events-auto">
+          {/* Server Selector Row */}
+          <div className="px-6 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar bg-gradient-to-t from-black/60 to-transparent">
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mr-2 flex-shrink-0">
+              Select Server:
+            </span>
+            <div className="flex items-center gap-2">
+              {CHANNELS.map((channel) => (
+                <button
+                  key={channel.name}
+                  onClick={() => setCurrentChannel(channel)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-200 border flex items-center gap-1.5 whitespace-nowrap ${
+                    currentChannel.name === channel.name
+                      ? 'bg-red-600 border-red-600 text-white shadow-lg shadow-red-600/30'
+                      : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800/80'
+                  }`}
+                >
+                  {channel.name}
+                  {channel.url.includes('.m3u8') && (
+                    <span className={`text-[8px] uppercase px-1.5 py-0.5 rounded font-black tracking-widest ${
+                      currentChannel.name === channel.name
+                        ? 'bg-white text-red-600'
+                        : 'bg-zinc-800 text-zinc-400'
+                    }`}>
+                      iOS OK
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="px-6 py-8 flex items-center justify-between bg-gradient-to-t from-black/95 via-black/70 to-transparent gap-4">
             {/* Play & Audio controls */}
             <div className="flex items-center gap-4">
@@ -410,6 +590,13 @@ export default function LivePage() {
           100% {
             transform: translate3d(-50%, 0, 0);
           }
+        }
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}</style>
     </div>
