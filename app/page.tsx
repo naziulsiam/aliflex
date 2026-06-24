@@ -38,7 +38,7 @@ export default function LivePage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const isHttps = window.location.protocol === 'https:';
-      setStreamUrl(isHttps ? '/api/stream' : DIRECT_STREAM_URL);
+      setStreamUrl(isHttps ? `${window.location.origin}/api/stream` : DIRECT_STREAM_URL);
     }
   }, []);
 
