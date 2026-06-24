@@ -24,23 +24,23 @@ interface StreamChannel {
 
 const CHANNELS: StreamChannel[] = [
   {
+    name: 'Fox Sports (English - Stable)',
+    url: 'https://streamsports.site/api/stream-proxy?url=https%3A%2F%2Fcdn.fifalive.click%2Fplay.m3u8'
+  },
+  {
+    name: 'PTV Sports (English - Stable)',
+    url: 'https://trs1.aynaott.com/ptvsports/tracks-v1a1/mono.ts.m3u8'
+  },
+  {
+    name: 'BeIN 4K (Ultra HD - English)',
+    url: 'https://pub-4aa1aaf3896e4dd0923f238800b68845.r2.dev/kickbd-bein4k/main.m3u8'
+  },
+  {
     name: 'AliFlix Stream (Direct)',
     url: DIRECT_STREAM_URL
   },
   {
-    name: 'KickBD Ultra (BeIN 4K)',
-    url: 'https://pub-4aa1aaf3896e4dd0923f238800b68845.r2.dev/kickbd-bein4k/main.m3u8'
-  },
-  {
-    name: 'ios Server 2 (PTV Sports)',
-    url: 'https://trs1.aynaott.com/ptvsports/tracks-v1a1/mono.ts.m3u8'
-  },
-  {
-    name: 'ios Server 1 (Fox Sports)',
-    url: 'https://streamsports.site/api/stream-proxy?url=https%3A%2F%2Fcdn.fifalive.click%2Fplay.m3u8'
-  },
-  {
-    name: 'KickBD Edge (FIFA FHD)',
+    name: 'FIFA FHD (Toffee CDN)',
     url: 'https://prod-cdn01-live.toffeelive.com/live/FIFA-2026-3/0/master_2000.m3u8?hdntl=Expires=1782422686~_GO=Generated~URLPrefix=aHR0cHM6Ly9wcm9kLWNkbjAxLWxpdmUudG9mZmVlbGl2ZS5jb20~Signature=AVXEwvdw_EW5yg24646Tzt0JTgHcKGu1d-bn9GbywpEI3FBOVE8cEtb0uSgOCgprrb7FYTph1R5J3AWwM5aCDED4FRAH'
   }
 ];
@@ -437,7 +437,7 @@ export default function LivePage() {
         }`}
       >
         {/* Top Header Bar */}
-        <div className="w-full px-6 py-6 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
+        <div className="w-full px-6 py-4 flex items-center justify-between bg-black/60 backdrop-blur-md border-b border-white/5 pointer-events-auto">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
             <span className="text-base font-extrabold tracking-widest">ALIFLIX</span>
@@ -450,9 +450,9 @@ export default function LivePage() {
         </div>
 
         {/* Bottom Control Bar */}
-        <div className="w-full flex flex-col pointer-events-auto">
+        <div className="w-full flex flex-col pointer-events-auto bg-black/85 backdrop-blur-md border-t border-white/10">
           {/* Server Selector Row */}
-          <div className="px-6 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar bg-gradient-to-t from-black/60 to-transparent">
+          <div className="px-6 py-3 flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-white/5">
             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mr-2 flex-shrink-0">
               Select Server:
             </span>
@@ -482,7 +482,7 @@ export default function LivePage() {
             </div>
           </div>
 
-          <div className="px-6 py-8 flex items-center justify-between bg-gradient-to-t from-black/95 via-black/70 to-transparent gap-4">
+          <div className="px-6 py-5 flex items-center justify-between gap-4">
             {/* Play & Audio controls */}
             <div className="flex items-center gap-4">
               <button 
