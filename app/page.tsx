@@ -1,342 +1,402 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, RotateCw, SearchX } from 'lucide-react';
-import { useAppStore } from '@/lib/store';
-import { parseM3U, groupChannels } from '@/lib/m3u';
-import { Channel } from '@/lib/types';
-import Header from '@/components/Header';
-import MobileNav from '@/components/MobileNav';
-import CategoriesDrawer from '@/components/CategoriesDrawer';
-import HeroCarousel from '@/components/HeroCarousel';
-import CategoryPills from '@/components/CategoryPills';
-import ChannelRow from '@/components/ChannelRow';
-import ChannelCard from '@/components/ChannelCard';
-import SkeletonRow from '@/components/SkeletonRow';
-import PlayerModal from '@/components/PlayerModal';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import Script from 'next/script';
+import { 
+  Play, 
+  Pause, 
+  Volume2, 
+  VolumeX, 
+  Maximize, 
+  Minimize, 
+  Loader2, 
+  AlertTriangle, 
+  Info, 
+  Radio
+} from 'lucide-react';
 
-const RAIL_LIMIT     = 20;
-const FEATURED_COUNT = 6;
+const STREAM_URL = 'http://162.19.255.233:8080/play/UNbAl57p9hXZClOu56FCTf_5weWAERKDgrt9JpvlAiI/m3u8';
 
-/* Pick N channels with logos from varied groups */
-function pickFeatured(channels: Channel[], count: number): Channel[] {
-  const withLogo = channels.filter(c => c.logo && c.logo.startsWith('http'));
-  if (withLogo.length === 0) return channels.slice(0, count);
-  const shuffled = [...withLogo].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
+export default function LivePage() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-/* Pick trending: prefer popular-sounding categories, dedupe */
-function pickTrending(channels: Channel[], count = 20): Channel[] {
-  const popular = channels.filter(c =>
-    /news|sport|entertainment|general|hd|movie|tv/i.test(c.group) && c.logo
-  );
-  const pool = popular.length >= count ? popular : channels.filter(c => c.logo);
-  return [...pool].sort(() => Math.random() - 0.5).slice(0, count);
-}
+  const [mpegtsLoaded, setMpegtsLoaded] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
+  const [showControls, setShowControls] = useState(true);
 
-export default function HomePage() {
-  const {
-    channels, loading, error,
-    recentChannels, favorites,
-    searchQuery, activeGroup, activeCategory,
-    setChannels, setLoading, setError,
-    openModal, setActiveCategory,
-  } = useAppStore();
+  // Auto-hide controls on mouse/touch inactivity
+  const resetHideTimer = useCallback(() => {
+    setShowControls(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 4000);
+  }, []);
 
-  const [categoriesOpen, setCategoriesOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [featuredChannels, setFeaturedChannels] = useState<Channel[]>([]);
-  const [trendingChannels, setTrendingChannels] = useState<Channel[]>([]);
-  const initialized = useRef(false);
-
-  /* ── Fetch playlist ── */
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError(null);
+    resetHideTimer();
+    const handleMouseMove = () => resetHideTimer();
+    const handleTouchStart = () => resetHideTimer();
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchstart', handleTouchStart);
+    };
+  }, [resetHideTimer]);
+
+  // Handle stream loading using mpegts.js
+  const initPlayer = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !window.mpegts) return;
+
+    setLoading(true);
+    setError(null);
+    setStatus('connecting');
+
+    // Clean up existing player if any
+    if (playerRef.current) {
       try {
-        const res = await fetch('/api/playlist');
-        if (!res.ok) throw new Error('Failed to load playlist');
-        const text = await res.text();
-        const parsed = parseM3U(text);
-        if (!cancelled) {
-          setChannels(parsed);
-          if (parsed.length > 0 && !initialized.current) {
-            initialized.current = true;
-            setFeaturedChannels(pickFeatured(parsed, FEATURED_COUNT));
-            setTrendingChannels(pickTrending(parsed));
-          }
-        }
-      } catch {
-        if (!cancelled) setError('Could not load channels. Please check your connection.');
-      } finally {
-        if (!cancelled) setLoading(false);
+        playerRef.current.destroy();
+      } catch (e) {
+        console.error(e);
       }
+      playerRef.current = null;
     }
-    load();
-    return () => { cancelled = true; };
-  }, [setChannels, setLoading, setError]);
 
-  /* ── Derived data ── */
-  const grouped    = useMemo(() => groupChannels(channels), [channels]);
-  const groupNames = useMemo(() => grouped.map(g => g.name), [grouped]);
+    if (window.mpegts.getFeatureList().mseLivePlayback) {
+      try {
+        const player = window.mpegts.createPlayer({
+          type: 'mse',
+          isLive: true,
+          url: STREAM_URL
+        }, {
+          enableWorker: true,
+          enableStashBuffer: false,
+          stashInitialSize: 128
+        });
 
-  const favoriteChannels = useMemo(
-    () => channels.filter(c => favorites.includes(c.id)),
-    [channels, favorites]
-  );
+        playerRef.current = player;
+        player.attachMediaElement(video);
+        player.load();
 
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return null;
-    const q = searchQuery.toLowerCase();
-    return channels.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.group.toLowerCase().includes(q) ||
-      c.country.toLowerCase().includes(q)
-    ).slice(0, 80);
-  }, [channels, searchQuery]);
+        player.play()
+          .then(() => {
+            setPlaying(true);
+            setLoading(false);
+            setStatus('live');
+          })
+          .catch((err: any) => {
+            console.warn('Auto-play blocked or failed:', err);
+            // Don't show error immediately as users might need to interact to play
+            setLoading(false);
+            setStatus('live');
+          });
 
-  /* ── Category-filtered rows ── */
-  const filteredGroups = useMemo(() => {
-    if (!activeCategory) return grouped;
-    return grouped.filter(g =>
-      g.name.toLowerCase().includes(activeCategory.toLowerCase())
-    );
-  }, [grouped, activeCategory]);
+        player.on(window.mpegts.Events.ERROR, (type: string, detail: string, info: any) => {
+          console.error('mpegts.js error:', type, detail, info);
+          setError('Stream unavailable. Retrying...');
+          setStatus('error');
+          setLoading(false);
+        });
 
-  const handleSelect = (channel: Channel) => openModal(channel);
+      } catch (err: any) {
+        console.error('Failed to create mpegts player:', err);
+        setError('Failed to initialize streaming engine.');
+        setStatus('error');
+        setLoading(false);
+      }
+    } else {
+      // Fallback for Safari/iOS which support native HLS but not MSE
+      video.src = STREAM_URL;
+      
+      const onLoadedMetadata = () => {
+        setLoading(false);
+        setStatus('live');
+        video.play().then(() => setPlaying(true)).catch(() => {});
+      };
 
-  /* ── Category pill names (simplified, trimmed) ── */
-  const pillCategories = useMemo(() => {
-    const names = groupNames.map(n => n.split(';')[0].trim());
-    return Array.from(new Set(names)).filter(Boolean);
-  }, [groupNames]);
+      const onError = () => {
+        setError('Incompatible browser format or stream offline.');
+        setStatus('error');
+        setLoading(false);
+      };
 
-  /* ─────────────────────────────────────────
-     Loading skeleton
-  ───────────────────────────────────────── */
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Header onOpenCategories={() => setCategoriesOpen(true)} />
-        <main className="flex-1 pb-24 lg:pb-10">
-          {/* Hero skeleton */}
-          <div className="shimmer-bg mb-0" style={{ height: 'clamp(300px, 62vh, 580px)' }} />
-          {/* Pills skeleton */}
-          <div className="h-12 bg-background/96 border-b border-border/40 mb-6 flex items-center gap-2 px-6">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-7 rounded-full shimmer-bg flex-shrink-0" style={{ width: 64 + i * 8 }} />
-            ))}
-          </div>
-          {Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} cardCount={8} />)}
-        </main>
-        <div className="fixed bottom-0 left-0 right-0 h-16 bg-surface/96 border-t border-border/60 lg:hidden" />
-      </div>
-    );
-  }
+      video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+      video.addEventListener('error', onError, { once: true });
+    }
+  }, []);
 
-  /* ─────────────────────────────────────────
-     Error state
-  ───────────────────────────────────────── */
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Header onOpenCategories={() => setCategoriesOpen(true)} />
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 px-6 text-center">
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-            <AlertTriangle className="w-10 h-10 text-primary" />
-          </div>
-          <div>
-            <p className="text-lg font-bold mb-1">Something went wrong</p>
-            <p className="text-sm text-muted max-w-sm">{error}</p>
-          </div>
-          <motion.button
-            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-            onClick={() => window.location.reload()}
-            className="flex items-center gap-2 px-6 py-3 rounded-full bg-primary hover:bg-primary/90 text-sm font-bold"
-          >
-            <RotateCw className="w-4 h-4" /> Try Again
-          </motion.button>
-        </div>
-      </div>
-    );
-  }
+  // Handle script load event
+  const handleScriptLoad = () => {
+    setMpegtsLoaded(true);
+    initPlayer();
+  };
 
-  /* ─────────────────────────────────────────
-     Main content regions
-  ───────────────────────────────────────── */
+  // Re-run player initialization if error occurs and user clicks retry
+  const handleRetry = () => {
+    initPlayer();
+  };
 
-  /* Search results */
-  let mainContent: React.ReactNode;
+  // Control Actions
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
 
-  if (searchResults !== null) {
-    mainContent = (
-      <div className="px-4 sm:px-6 py-4">
-        <h2 className="text-base sm:text-xl font-bold mb-4">
-          {searchResults.length > 0
-            ? `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''} for "${searchQuery}"`
-            : `No results for "${searchQuery}"`}
-        </h2>
-        {searchResults.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <SearchX className="w-14 h-14 text-muted/25 mb-4" />
-            <p className="font-semibold mb-1">No channels found</p>
-            <p className="text-sm text-muted">Try a different search term or browse by category.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {searchResults.map((ch, idx) => (
-              <motion.div
-                key={`${ch.id}-${idx}`}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: Math.min(idx * 0.02, 0.35) }}
-              >
-                <ChannelCard channel={ch} onSelect={handleSelect} index={idx} />
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
+    if (video.paused || !playing) {
+      video.play().then(() => {
+        setPlaying(true);
+      }).catch(() => {});
+    } else {
+      video.pause();
+      setPlaying(false);
+    }
+  };
 
-  /* My List view */
-  else if (activeGroup === '__favorites') {
-    mainContent = (
-      <div className="px-4 sm:px-6 py-4">
-        <h2 className="text-base sm:text-xl font-bold mb-4">My List</h2>
-        {favoriteChannels.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-16 h-16 rounded-full bg-surface2 flex items-center justify-center mb-4 text-3xl">♡</div>
-            <p className="font-semibold mb-1">No favorites yet</p>
-            <p className="text-sm text-muted">Tap the heart icon on any channel card to save it here.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {favoriteChannels.map((ch, idx) => (
-              <ChannelCard key={`${ch.id}-${idx}`} channel={ch} onSelect={handleSelect} index={idx} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
+  const toggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
 
-  /* Continue Watching view */
-  else if (activeGroup === '__recent') {
-    mainContent = (
-      <div className="px-4 sm:px-6 py-4">
-        <h2 className="text-base sm:text-xl font-bold mb-4">Continue Watching</h2>
-        {recentChannels.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-16 h-16 rounded-full bg-surface2 flex items-center justify-center mb-4 text-3xl">▷</div>
-            <p className="font-semibold mb-1">Nothing watched yet</p>
-            <p className="text-sm text-muted">Channels you watch will appear here.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {recentChannels.map((ch, idx) => (
-              <ChannelCard key={`${ch.id}-${idx}`} channel={ch} onSelect={handleSelect} index={idx} />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
+    const nextMuted = !muted;
+    video.muted = nextMuted;
+    setMuted(nextMuted);
+    if (nextMuted) {
+      video.volume = 0;
+    } else {
+      video.volume = volume || 0.5;
+    }
+  };
 
-  /* Single category view */
-  else if (activeGroup && activeGroup !== '__favorites' && activeGroup !== '__recent') {
-    const group = grouped.find(g => g.name === activeGroup);
-    mainContent = (
-      <div className="px-4 sm:px-6 py-4">
-        <h2 className="text-base sm:text-xl font-bold mb-4">{activeGroup}</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-          {(group?.channels ?? []).map((ch, idx) => (
-            <ChannelCard key={`${ch.id}-${idx}`} channel={ch} onSelect={handleSelect} index={idx} />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const handleVolumeChange = (val: number) => {
+    const video = videoRef.current;
+    if (!video) return;
 
-  /* ── HOME browse ── */
-  else {
-    mainContent = (
-      <>
-        {/* Hero carousel */}
-        <HeroCarousel channels={featuredChannels} onPlay={handleSelect} />
+    video.volume = val;
+    video.muted = val === 0;
+    setVolume(val);
+    setMuted(val === 0);
+  };
 
-        {/* Category pills */}
-        <CategoryPills categories={pillCategories} />
+  const toggleFullscreen = () => {
+    const container = containerRef.current;
+    if (!container) return;
 
-        <div className="mt-4">
-          {/* Continue Watching */}
-          {recentChannels.length > 0 && (
-            <ChannelRow title="Continue Watching" channels={recentChannels} onSelect={handleSelect} />
-          )}
+    if (!document.fullscreenElement) {
+      container.requestFullscreen?.()
+        .then(() => setFullscreen(true))
+        .catch(() => {});
+    } else {
+      document.exitFullscreen?.()
+        .then(() => setFullscreen(false))
+        .catch(() => {});
+    }
+  };
 
-          {/* My List */}
-          {favoriteChannels.length > 0 && (
-            <ChannelRow title="My List" channels={favoriteChannels} onSelect={handleSelect} />
-          )}
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setFullscreen(!!document.fullscreenElement);
+    };
 
-          {/* Trending Now */}
-          {trendingChannels.length > 0 && (
-            <ChannelRow title="Trending Now 🔥" channels={trendingChannels} onSelect={handleSelect} />
-          )}
-
-          {/* Dynamic category rows — filtered by active pill */}
-          {filteredGroups.map(group => (
-            <ChannelRow
-              key={group.name}
-              title={group.name}
-              channels={group.channels.slice(0, RAIL_LIMIT)}
-              onSelect={handleSelect}
-            />
-          ))}
-        </div>
-      </>
-    );
-  }
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header onOpenCategories={() => setCategoriesOpen(true)} />
+    <div 
+      ref={containerRef}
+      className="relative w-full h-screen bg-black overflow-hidden select-none font-sans text-white"
+    >
+      {/* MPEGTS CDN Script */}
+      <Script 
+        src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"
+        strategy="afterInteractive"
+        onLoad={handleScriptLoad}
+      />
 
-      <main className="flex-1 min-w-0 pb-24 lg:pb-10 overflow-x-hidden">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeGroup ?? (activeCategory ?? 'home')}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
+      {/* Main Video Element */}
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain bg-black z-0"
+        playsInline
+        onClick={togglePlay}
+      />
+
+      {/* Loading Overlay */}
+      {loading && !error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-40 transition-opacity duration-500">
+          <div className="text-3xl font-black tracking-widest mb-6">
+            ALI<span className="text-red-600">FLIX</span>
+          </div>
+          <Loader2 className="w-10 h-10 text-red-600 animate-spin mb-4" />
+          <div className="text-xs uppercase tracking-widest text-zinc-500 animate-pulse">
+            Connecting to stream...
+          </div>
+        </div>
+      )}
+
+      {/* Error Overlay */}
+      {error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-45 px-6 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-600/10 flex items-center justify-center mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-lg font-bold mb-2">Stream Error</h2>
+          <p className="text-sm text-zinc-400 max-w-sm mb-6">{error}</p>
+          
+          <button
+            onClick={handleRetry}
+            className="px-6 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-sm font-semibold transition-colors duration-200"
           >
-            {mainContent}
-          </motion.div>
-        </AnimatePresence>
-      </main>
+            Retry Connection
+          </button>
+        </div>
+      )}
 
-      <MobileNav
-        onOpenCategories={() => setCategoriesOpen(true)}
-        onOpenSearch={() => {
-          /* trigger mobile search via Header's internal state — use custom event */
-          window.dispatchEvent(new CustomEvent('aliflex:open-search'));
-        }}
-      />
+      {/* UI Controls Overlay */}
+      <div 
+        className={`absolute inset-0 z-30 flex flex-col justify-between pointer-events-none transition-opacity duration-300 ${
+          showControls ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {/* Top Header Bar */}
+        <div className="w-full px-6 py-6 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent pointer-events-auto">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
+            <span className="text-base font-extrabold tracking-widest">ALIFLIX</span>
+          </div>
+          
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-red-600 text-[10px] font-black tracking-widest text-white shadow-lg shadow-red-600/20">
+            <Radio className="w-3.5 h-3.5 animate-pulse" />
+            LIVE
+          </div>
+        </div>
 
-      <CategoriesDrawer
-        groups={groupNames}
-        open={categoriesOpen}
-        onClose={() => setCategoriesOpen(false)}
-      />
+        {/* Bottom Control Bar */}
+        <div className="w-full flex flex-col pointer-events-auto">
+          <div className="px-6 py-8 flex items-center justify-between bg-gradient-to-t from-black/95 via-black/70 to-transparent gap-4">
+            {/* Play & Audio controls */}
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={togglePlay}
+                className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center transition-all duration-150 backdrop-blur-md border border-white/5"
+                title={playing ? 'Pause' : 'Play'}
+              >
+                {playing ? (
+                  <Pause className="w-5 h-5 fill-white" />
+                ) : (
+                  <Play className="w-5 h-5 fill-white ml-0.5" />
+                )}
+              </button>
 
-      {/* Global player modal */}
-      <PlayerModal />
+              <div className="flex items-center gap-2 group/vol">
+                <button 
+                  onClick={toggleMute}
+                  className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center transition-all duration-150 backdrop-blur-md border border-white/5"
+                  title={muted ? 'Unmute' : 'Mute'}
+                >
+                  {muted ? (
+                    <VolumeX className="w-5 h-5" />
+                  ) : (
+                    <Volume2 className="w-5 h-5" />
+                  )}
+                </button>
+                
+                <input 
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={muted ? 0 : volume}
+                  onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                  className="w-20 accent-red-600 h-1 rounded-lg bg-white/20 cursor-pointer transition-all duration-200 outline-none"
+                  title="Volume"
+                />
+              </div>
+            </div>
+
+            {/* Connection Status Badge */}
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-full bg-white/5 border border-white/5 backdrop-blur-md">
+              <div 
+                className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                  status === 'live' ? 'bg-green-500 shadow-lg shadow-green-500/50' : 
+                  status === 'error' ? 'bg-red-600 animate-pulse' : 'bg-zinc-500 animate-pulse'
+                }`} 
+              />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-300">
+                {status === 'live' ? 'Connected' : status === 'error' ? 'Connection Error' : 'Connecting...'}
+              </span>
+            </div>
+
+            {/* Fullscreen control */}
+            <div>
+              <button 
+                onClick={toggleFullscreen}
+                className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center transition-all duration-150 backdrop-blur-md border border-white/5"
+                title={fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              >
+                {fullscreen ? (
+                  <Minimize className="w-5 h-5" />
+                ) : (
+                  <Maximize className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Scrolling Ticker Info Bar */}
+          <div className="w-full bg-zinc-950 border-t border-white/5 overflow-hidden z-10 pb-[env(safe-area-inset-bottom)]">
+            <div className="w-full h-10 flex items-center">
+              <div className="flex-shrink-0 h-full flex items-center gap-1.5 px-4 bg-red-600 text-[10px] font-black tracking-widest uppercase text-white shadow-lg z-20">
+                <Info className="w-3.5 h-3.5" />
+                INFO
+              </div>
+              
+              <div className="flex-1 overflow-hidden relative h-full flex items-center z-10">
+                <div 
+                  className="absolute whitespace-nowrap text-xs font-semibold text-zinc-400 tracking-wide uppercase select-none animate-[ticker_30s_linear_infinite]"
+                  style={{
+                    animationPlayState: 'running'
+                  }}
+                >
+                  ⚽ This site is made by AliSiam — Watch the World Cup 2026 for FREE
+                  <span className="text-red-600 mx-6 font-black">|</span>
+                  ⚽ This site is made by AliSiam — Watch the World Cup 2026 for FREE
+                  <span className="text-red-600 mx-6 font-black">|</span>
+                  ⚽ This site is made by AliSiam — Watch the World Cup 2026 for FREE
+                  <span className="text-red-600 mx-6 font-black">|</span>
+                  ⚽ This site is made by AliSiam — Watch the World Cup 2026 for FREE
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Inline styles for custom animations */}
+      <style jsx global>{`
+        @keyframes ticker {
+          0% {
+            transform: translate3d(0, 0, 0);
+          }
+          100% {
+            transform: translate3d(-50%, 0, 0);
+          }
+        }
+      `}</style>
     </div>
   );
 }

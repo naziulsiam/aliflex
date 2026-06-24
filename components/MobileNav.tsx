@@ -1,12 +1,13 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Home, Search, Heart, Grid3x3 } from 'lucide-react';
+import { Home, Search, Heart, Grid3x3, ListPlus } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 
 interface MobileNavProps {
   onOpenCategories: () => void;
   onOpenSearch: () => void;
+  onOpenPlaylistManager: () => void;
 }
 
 const ITEMS = [
@@ -14,9 +15,10 @@ const ITEMS = [
   { icon: Search,   label: 'Search',     value: '__search',            action: 'search' },
   { icon: Heart,    label: 'Favorites',  value: '__favorites',         action: 'favorites' },
   { icon: Grid3x3,  label: 'Categories', value: '__categories',        action: 'categories' },
+  { icon: ListPlus, label: 'Playlists',  value: '__playlists',         action: 'playlist-manager' },
 ] as const;
 
-export default function MobileNav({ onOpenCategories, onOpenSearch }: MobileNavProps) {
+export default function MobileNav({ onOpenCategories, onOpenSearch, onOpenPlaylistManager }: MobileNavProps) {
   const activeGroup      = useAppStore(s => s.activeGroup);
   const setActiveGroup   = useAppStore(s => s.setActiveGroup);
   const setActiveCategory = useAppStore(s => s.setActiveCategory);
@@ -24,12 +26,13 @@ export default function MobileNav({ onOpenCategories, onOpenSearch }: MobileNavP
   const handleClick = (action: string, value: string | null) => {
     if (action === 'search')     { onOpenSearch(); return; }
     if (action === 'categories') { onOpenCategories(); return; }
+    if (action === 'playlist-manager') { onOpenPlaylistManager(); return; }
     setActiveGroup(value);
     setActiveCategory(null);
   };
 
   const isActive = (action: string, value: string | null) => {
-    if (action === 'search' || action === 'categories') return false;
+    if (action === 'search' || action === 'categories' || action === 'playlist-manager') return false;
     return activeGroup === value;
   };
 

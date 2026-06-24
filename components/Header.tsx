@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, Tv2, ArrowLeft, Heart, LayoutGrid } from 'lucide-react';
+import { Search, X, Tv2, ArrowLeft, Heart, LayoutGrid, ListPlus } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
 
 interface HeaderProps {
   onOpenCategories?: () => void;
+  onOpenPlaylistManager?: () => void;
 }
 
 const NAV_LINKS = [
@@ -14,9 +15,10 @@ const NAV_LINKS = [
   { label: 'Live TV',    action: 'home' },
   { label: 'Categories', action: 'categories' },
   { label: 'Favorites',  action: 'favorites' },
+  { label: 'Manage Streams', action: 'playlist-manager' },
 ] as const;
 
-export default function Header({ onOpenCategories }: HeaderProps) {
+export default function Header({ onOpenCategories, onOpenPlaylistManager }: HeaderProps) {
   const searchQuery      = useAppStore(s => s.searchQuery);
   const setSearchQuery   = useAppStore(s => s.setSearchQuery);
   const activeGroup      = useAppStore(s => s.activeGroup);
@@ -64,6 +66,8 @@ export default function Header({ onOpenCategories }: HeaderProps) {
       onOpenCategories?.();
     } else if (action === 'favorites') {
       setActiveGroup('__favorites');
+    } else if (action === 'playlist-manager') {
+      onOpenPlaylistManager?.();
     }
   };
 
@@ -124,7 +128,7 @@ export default function Header({ onOpenCategories }: HeaderProps) {
         </nav>
 
         {/* ── Right: desktop search ── */}
-        <div className="hidden sm:flex items-center gap-2 ml-auto">
+        <div className="hidden sm:flex items-center gap-3 ml-auto">
           {/* Favorites shortcut (desktop, medium screens) */}
           <motion.button
             whileTap={{ scale: 0.9 }}
@@ -133,6 +137,16 @@ export default function Header({ onOpenCategories }: HeaderProps) {
             aria-label="My List"
           >
             <Heart className={`w-5 h-5 ${activeGroup === '__favorites' ? 'fill-primary text-primary' : 'text-muted'}`} />
+          </motion.button>
+
+          {/* Playlist Manager shortcut (desktop) */}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={onOpenPlaylistManager}
+            className="flex p-2 rounded-full hover:bg-surface transition-colors"
+            aria-label="Manage Playlists"
+          >
+            <ListPlus className="w-5 h-5 text-muted hover:text-text" />
           </motion.button>
 
           {/* Search bar */}
@@ -171,6 +185,14 @@ export default function Header({ onOpenCategories }: HeaderProps) {
             aria-label="Search"
           >
             <Search className="w-5 h-5" />
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={onOpenPlaylistManager}
+            className="p-2 rounded-full hover:bg-surface transition-colors"
+            aria-label="Manage Playlists"
+          >
+            <ListPlus className="w-5 h-5" />
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.9 }}

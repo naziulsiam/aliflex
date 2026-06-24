@@ -38,20 +38,24 @@ export default function ChannelCard({ channel, onSelect, index = 0 }: ChannelCar
         style={hovered ? { boxShadow: '0 8px 32px rgba(0,0,0,0.55), 0 0 0 2px rgba(229,9,20,0.45)' } : {}}
       >
         {/* ── Thumbnail ── */}
-        <div className="relative w-full aspect-video bg-surface2 flex items-center justify-center overflow-hidden">
+        <div className="relative w-full aspect-video bg-surface2 flex items-center justify-center overflow-hidden border-b border-border/20">
           {channel.logo && !imgFailed ? (
             <img
               src={channel.logo}
               alt={channel.name}
               loading="lazy"
-              className="w-full h-full object-contain p-3 transition-transform duration-500"
-              style={hovered ? { transform: 'scale(1.05)' } : {}}
+              className="w-full h-full object-contain p-3.5 transition-transform duration-500"
+              style={hovered ? { transform: 'scale(1.06)' } : {}}
               onError={() => setImgFailed(true)}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center text-muted gap-1">
-              <Tv className="w-7 h-7" />
-              <span className="text-[10px] font-medium text-muted/60 text-center px-2 line-clamp-2">{channel.name}</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-surface3 to-surface2 p-3 text-center select-none">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-center mb-1 text-primary shadow-inner">
+                <Tv className="w-4.5 h-4.5" />
+              </div>
+              <span className="text-[11px] font-extrabold text-text/90 line-clamp-2 px-1 leading-snug">
+                {channel.name}
+              </span>
             </div>
           )}
 
