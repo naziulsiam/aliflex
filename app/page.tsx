@@ -15,7 +15,7 @@ import {
   Radio
 } from 'lucide-react';
 
-const STREAM_URL = 'http://162.19.255.233:8080/play/UNbAl57p9hXZClOu56FCTf_5weWAERKDgrt9JpvlAiI/m3u8';
+const DIRECT_STREAM_URL = 'http://162.19.255.233:8080/play/UNbAl57p9hXZClOu56FCTf_5weWAERKDgrt9JpvlAiI/m3u8';
 
 export default function LivePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -24,6 +24,7 @@ export default function LivePage() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [mpegtsLoaded, setMpegtsLoaded] = useState(false);
+  const [streamUrl, setStreamUrl] = useState('');
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -32,6 +33,14 @@ export default function LivePage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   const [showControls, setShowControls] = useState(true);
+
+  // Determine stream URL protocol on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isHttps = window.location.protocol === 'https:';
+      setStreamUrl(isHttps ? '/api/stream' : DIRECT_STREAM_URL);
+    }
+  }, []);
 
   // Auto-hide controls on mouse/touch inactivity
   const resetHideTimer = useCallback(() => {
@@ -58,9 +67,9 @@ export default function LivePage() {
   }, [resetHideTimer]);
 
   // Handle stream loading using mpegts.js
-  const initPlayer = useCallback(() => {
+  const initPlayer = useCallback((url: string) => {
     const video = videoRef.current;
-    if (!video || !window.mpegts) return;
+    if (!video || !window.mpegts || !url) return;
 
     setLoading(true);
     setError(null);
@@ -81,7 +90,7 @@ export default function LivePage() {
         const player = window.mpegts.createPlayer({
           type: 'mse',
           isLive: true,
-          url: STREAM_URL
+          url: url
         }, {
           enableWorker: true,
           enableStashBuffer: false,
@@ -120,7 +129,7 @@ export default function LivePage() {
       }
     } else {
       // Fallback for Safari/iOS which support native HLS but not MSE
-      video.src = STREAM_URL;
+      video.src = url;
       
       const onLoadedMetadata = () => {
         setLoading(false);
@@ -142,12 +151,18 @@ export default function LivePage() {
   // Handle script load event
   const handleScriptLoad = () => {
     setMpegtsLoaded(true);
-    initPlayer();
   };
+
+  // Trigger player setup once both library is loaded and URL is resolved
+  useEffect(() => {
+    if (mpegtsLoaded && streamUrl) {
+      initPlayer(streamUrl);
+    }
+  }, [mpegtsLoaded, streamUrl, initPlayer]);
 
   // Re-run player initialization if error occurs and user clicks retry
   const handleRetry = () => {
-    initPlayer();
+    if (streamUrl) initPlayer(streamUrl);
   };
 
   // Control Actions
